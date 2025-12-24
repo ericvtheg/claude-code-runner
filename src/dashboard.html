@@ -196,12 +196,16 @@
   <div class="modal" id="log-modal">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-title">Logs</h2>
+      <span class="refresh-note">Auto-refresh: 2s</span>
       <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
     <div class="modal-content" id="log-content">Loading...</div>
   </div>
 
   <script>
+    let currentLogTaskId = null;
+    let logRefreshInterval = null;
+
     async function fetchTasks() {
       try {
         const res = await fetch('/tasks');
@@ -271,22 +275,41 @@
       }
     }
 
-    async function showLogs(id) {
-      document.getElementById('modal-title').textContent = 'Logs: ' + id;
-      document.getElementById('log-content').textContent = 'Loading...';
-      document.getElementById('log-modal').classList.add('open');
-
+    async function fetchLogs(id) {
       try {
         const res = await fetch('/task/' + id + '/logs');
         const text = await res.text();
-        document.getElementById('log-content').textContent = text || '(no logs yet)';
+        const content = document.getElementById('log-content');
+        const wasAtBottom = content.scrollHeight - content.scrollTop <= content.clientHeight + 50;
+        content.textContent = text || '(no logs yet)';
+        if (wasAtBottom) {
+          content.scrollTop = content.scrollHeight;
+        }
       } catch (e) {
         document.getElementById('log-content').textContent = 'Error loading logs: ' + e.message;
       }
     }
 
+    async function showLogs(id) {
+      currentLogTaskId = id;
+      document.getElementById('modal-title').textContent = 'Logs: ' + id;
+      document.getElementById('log-content').textContent = 'Loading...';
+      document.getElementById('log-modal').classList.add('open');
+
+      await fetchLogs(id);
+      document.getElementById('log-content').scrollTop = document.getElementById('log-content').scrollHeight;
+
+      if (logRefreshInterval) clearInterval(logRefreshInterval);
+      logRefreshInterval = setInterval(() => fetchLogs(id), 2000);
+    }
+
     function closeModal() {
       document.getElementById('log-modal').classList.remove('open');
+      currentLogTaskId = null;
+      if (logRefreshInterval) {
+        clearInterval(logRefreshInterval);
+        logRefreshInterval = null;
+      }
     }
 
     document.addEventListener('keydown', e => {
