@@ -18,9 +18,8 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
 # Claude Code
 RUN npm install -g @anthropic-ai/claude-code
 
-# Set up node user's home for Claude CLI credentials
-RUN mkdir -p /home/node/.claude && \
-    chown -R node:node /home/node/.claude
+# Ensure node user owns their entire home directory
+RUN chown -R node:node /home/node
 
 WORKDIR /app
 COPY package.json ./
@@ -46,8 +45,7 @@ USER node
 
 # Git config for commits (as node user)
 RUN git config --global user.email "noreply@anthropic.com" \
-    && git config --global user.name "Claude" \
-    && git config --global credential.helper '!/bin/bash -c "echo username=x-access-token; echo password=\$GH_TOKEN"'
+    && git config --global user.name "Claude"
 
 EXPOSE 3000
 CMD ["node", "src/server.js"]
