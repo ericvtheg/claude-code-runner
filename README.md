@@ -17,8 +17,15 @@ services:
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
     volumes:
-      - ~/.claude:/root/.claude
+      - ~/.claude:/home/node/.claude
+      # Persist installed packages across restarts
+      - claude-local:/usr/local
+      - claude-caches:/home/node/.cache
     restart: unless-stopped
+
+volumes:
+  claude-local:
+  claude-caches:
 ```
 
 ## API
@@ -55,4 +62,4 @@ claude
 # Follow the login prompts to authenticate with your subscription
 ```
 
-This creates credentials at `~/.claude/` which get mounted into the container via the volume mount (`~/.claude:/root/.claude`). The container will use your subscription for all Claude API calls.
+This creates credentials at `~/.claude/` which get mounted into the container via the volume mount (`~/.claude:/home/node/.claude`). The container will use your subscription for all Claude API calls.

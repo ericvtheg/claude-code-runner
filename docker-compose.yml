@@ -1,7 +1,7 @@
 services:
   claude-runner:
     image: ericvtheg/claude-code-runner:0c10e35
-    container_name: claude-runner
+    container_name: claude-code-runner
     ports:
       - "7334:3000"
     environment:
@@ -10,6 +10,10 @@ services:
       - PORT=3000
     volumes:
       - ~/.claude:/home/node/.claude
+      # Persist installed packages (npm, pip, gem, etc.) across restarts
+      - claude-local:/usr/local
+      # Cache directories for faster reinstalls
+      - claude-caches:/home/node/.cache
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -17,3 +21,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  claude-local:
+  claude-caches:
