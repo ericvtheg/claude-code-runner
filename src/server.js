@@ -212,12 +212,16 @@ async function runOrchestrator(id, prompt, taskDir) {
 
     let output = '';
 
+    console.log(`[${id}] PTY spawned, pid: ${proc.pid}`);
+
     proc.onData(data => {
+      console.log(`[${id}] onData received ${data.length} bytes`);
       output += data;
       logStream.write(data);
     });
 
-    proc.onExit(async ({ exitCode }) => {
+    proc.onExit(async ({ exitCode, signal }) => {
+      console.log(`[${id}] onExit: code=${exitCode}, signal=${signal}, output length=${output.length}`);
       clearTimeout(timeout);
       logStream.end();
 
