@@ -9,7 +9,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - PORT=3000
     volumes:
-      - ~/.claude:/root/.claude
+      - ~/.claude:/home/claude/.claude
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
