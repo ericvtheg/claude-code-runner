@@ -17,7 +17,7 @@ services:
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
     volumes:
-      - ~/.claude:/root/.claude:ro
+      - ~/.claude:/root/.claude
     restart: unless-stopped
 ```
 
@@ -42,4 +42,17 @@ curl http://localhost:7334/health
 ## Requirements
 
 - `GITHUB_TOKEN` with repo scope
-- Claude credentials mounted at `/root/.claude`
+- Claude authentication from your host machine
+
+### Claude Authentication
+
+The container uses your existing Claude Code authentication from the host machine. Before running the container, authenticate Claude Code on your host:
+
+```bash
+# On your host machine (not in Docker)
+claude
+
+# Follow the login prompts to authenticate with your subscription
+```
+
+This creates credentials at `~/.claude/` which get mounted into the container via the volume mount (`~/.claude:/root/.claude`). The container will use your subscription for all Claude API calls.
