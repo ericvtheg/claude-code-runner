@@ -58,14 +58,11 @@ Commit and push after EVERY change. This is your safety net.
 `.trim();
 }
 
-function getOrchestratorPrompt(prompt, branchName, workDir) {
-  const workerSystemPrompt = getWorkerSystemPrompt(branchName);
-
+function getOrchestratorPrompt(prompt, workDir) {
   return `
 You are an orchestrator. Your ONLY job is to:
 1. Figure out which repo the user is asking about
 2. Clone it
-3. Spawn a worker Claude in that repo
 
 Available commands:
 - gh repo list --json name,url,description --limit 100
@@ -74,20 +71,11 @@ Available commands:
 Workflow:
 1. List repos, identify the right one from the user's prompt
 2. Clone to ${workDir}/repo
-3. cd into the cloned repo
-4. Run: claude -p "<prompt>" --system-prompt "<system>" --output-format stream-json --dangerously-skip-permissions
+3. Exit successfully
 
-The worker system prompt MUST be exactly:
-"""
-${workerSystemPrompt}
-"""
-
-The worker task prompt should be the user's request, clarified if needed.
+Do NOT spawn any worker or run any other commands after cloning.
 
 User request: ${prompt}
-
-IMPORTANT: After the worker finishes, output the PR URL on its own line like:
-PR_URL: https://github.com/...
 `.trim();
 }
 
@@ -126,7 +114,7 @@ app.post('/task', async (req, res) => {
     logFile: path.join(taskDir, 'output.log')
   });
 
-  runOrchestrator(id, prompt, taskDir).catch(err => {
+  runTask(id, prompt, taskDir).catch(err => {
     tasks.set(id, {
       ...tasks.get(id),
       status: 'failed',
@@ -178,16 +166,31 @@ app.get('/', async (req, res) => {
   res.send(html);
 });
 
-async function runOrchestrator(id, prompt, taskDir) {
+async function runTask(id, prompt, taskDir) {
   const logFile = path.join(taskDir, 'output.log');
-  const logStream = createWriteStream(logFile, { flags: 'a' });
-
+  const repoDir = path.join(taskDir, 'repo');
   const branchName = `claude/${id}`;
-  const fullPrompt = getOrchestratorPrompt(prompt, branchName, taskDir);
 
   await appendFile(logFile, `=== Task started: ${new Date().toISOString()} ===\n`);
   await appendFile(logFile, `ID: ${id}\n`);
   await appendFile(logFile, `Prompt: ${prompt}\n\n`);
+
+  // Phase 1: Orchestrator - identify and clone repo
+  await appendFile(logFile, `\n=== ORCHESTRATOR PHASE ===\n`);
+  await runOrchestrator(id, prompt, taskDir, logFile);
+  await appendFile(logFile, `\n=== ORCHESTRATOR COMPLETE ===\n\n`);
+
+  // Phase 2: Worker - run in cloned repo
+  await appendFile(logFile, `=== WORKER PHASE ===\n`);
+  const result = await runWorker(id, prompt, repoDir, branchName, logFile);
+  await appendFile(logFile, `\n=== WORKER COMPLETE ===\n`);
+
+  return result;
+}
+
+async function runOrchestrator(id, prompt, taskDir, logFile) {
+  const logStream = createWriteStream(logFile, { flags: 'a' });
+  const fullPrompt = getOrchestratorPrompt(prompt, taskDir);
 
   return new Promise((resolve, reject) => {
     const proc = pty.spawn('claude', [
@@ -207,27 +210,82 @@ async function runOrchestrator(id, prompt, taskDir) {
 
     const timeout = setTimeout(() => {
       proc.kill();
-      const err = new Error('Task timed out after 1 hour');
+      const err = new Error('Orchestrator timed out');
+      err.errorType = 'timeout';
+      reject(err);
+    }, 10 * 60 * 1000); // 10 min timeout for orchestrator
+
+    let output = '';
+
+    console.log(`[${id}] Orchestrator PTY spawned, pid: ${proc.pid}`);
+
+    proc.onData(data => {
+      output += data;
+      logStream.write(data);
+    });
+
+    proc.onExit(async ({ exitCode }) => {
+      clearTimeout(timeout);
+      logStream.end();
+
+      const detectedError = detectError(output);
+      if (detectedError) {
+        const err = new Error(detectedError.message);
+        err.errorType = detectedError.type;
+        return reject(err);
+      }
+
+      if (exitCode !== 0) {
+        return reject(new Error(`Orchestrator exited with code ${exitCode}`));
+      }
+
+      console.log(`[${id}] Orchestrator completed successfully`);
+      resolve();
+    });
+  });
+}
+
+async function runWorker(id, prompt, repoDir, branchName, logFile) {
+  const logStream = createWriteStream(logFile, { flags: 'a' });
+  const systemPrompt = getWorkerSystemPrompt(branchName);
+
+  return new Promise((resolve, reject) => {
+    const proc = pty.spawn('claude', [
+      '-p', prompt,
+      '--system-prompt', systemPrompt,
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--dangerously-skip-permissions'
+    ], {
+      cwd: repoDir,
+      env: {
+        ...process.env,
+        GH_TOKEN: process.env.GITHUB_TOKEN
+      },
+      cols: 200,
+      rows: 50
+    });
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      const err = new Error('Worker timed out after 1 hour');
       err.errorType = 'timeout';
       reject(err);
     }, TASK_TIMEOUT);
 
     let output = '';
 
-    console.log(`[${id}] PTY spawned, pid: ${proc.pid}`);
+    console.log(`[${id}] Worker PTY spawned in ${repoDir}, pid: ${proc.pid}`);
 
     proc.onData(data => {
-      console.log(`[${id}] onData received ${data.length} bytes`);
       output += data;
       logStream.write(data);
     });
 
-    proc.onExit(async ({ exitCode, signal }) => {
-      console.log(`[${id}] onExit: code=${exitCode}, signal=${signal}, output length=${output.length}`);
+    proc.onExit(async ({ exitCode }) => {
       clearTimeout(timeout);
       logStream.end();
 
-      // Check for known error patterns
       const detectedError = detectError(output);
       if (detectedError) {
         console.error(`[${id}] ${detectedError.type.toUpperCase()}: ${detectedError.message}`);
@@ -243,7 +301,7 @@ async function runOrchestrator(id, prompt, taskDir) {
         return reject(err);
       }
 
-      // Parse PR URL
+      // Parse PR URL from worker output
       const prMatch = output.match(/https:\/\/github\.com\/[^\s]+\/pull\/\d+/);
 
       const task = tasks.get(id);
@@ -257,11 +315,10 @@ async function runOrchestrator(id, prompt, taskDir) {
 
       // Cleanup cloned repo on success (keep logs)
       if (exitCode === 0) {
-        const repoDir = path.join(taskDir, 'repo');
         await rm(repoDir, { recursive: true, force: true }).catch(() => {});
       }
 
-      exitCode === 0 ? resolve() : reject(new Error(`Exit code ${exitCode}`));
+      exitCode === 0 ? resolve() : reject(new Error(`Worker exited with code ${exitCode}`));
     });
   });
 }
