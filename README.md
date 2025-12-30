@@ -1,12 +1,16 @@
 # Claude Code Runner
 
-Self hostable Claude Code runner to seamlessly fire prompts from anywhere. Container accepts task prompts via HTTP and spawns Claude Code instance to autonomously implement them. Makes use of your Claude Code subscription instead of requiring an API key.
+Self hostable Claude Code runner to execute prompts from anywhere. Container accepts task prompts via HTTP and spawns Claude Code instance to autonomously implement them. Makes use of your Claude Code subscription instead of requiring an API key.
+
+## How it Works
+
+Claude Code uses your authenticated session from your OS (no API key). Claude Code will use your provided Github token to find your relevant repository, clone it, make requested changes based on your prompt, then open a PR. 
 
 ## Dashboard
 
-![Dashboard](docs/Screenshot%202025-12-29%20at%207.56.47%20PM.png)
+![Dashboard](docs/dashboard.png)
 
-![Logs View](docs/Screenshot%202025-12-29%20at%207.57.26%20PM.png)
+![Logs View](docs/logs-view.png)
 
 ## Quick Start
 
@@ -18,20 +22,18 @@ docker pull ericvtheg/claude-code-runner:latest
 services:
   claude-runner:
     image: ericvtheg/claude-code-runner:latest
+    container_name: claude-code-runner
     ports:
       - "7334:3000"
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - PORT=3000
     volumes:
       - ~/.claude:/home/node/.claude
-      # Persist installed packages across restarts
-      - claude-local:/usr/local
-      - claude-caches:/home/node/.cache
     restart: unless-stopped
 
 volumes:
   claude-local:
-  claude-caches:
 ```
 
 ## API
@@ -69,3 +71,7 @@ claude
 ```
 
 This creates credentials at `~/.claude/` which get mounted into the container via the volume mount (`~/.claude:/home/node/.claude`). The container will use your subscription for all Claude API calls.
+
+## Security
+
+This service has no built-in authentication. It is expected to be hosted behind a VPN or private network that only you have access to. Do not expose to the public internet.
