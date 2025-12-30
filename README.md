@@ -1,6 +1,12 @@
 # Claude Code Runner
 
-Containerized service that accepts task prompts via HTTP and spawns Claude to autonomously implement them. Creates draft PRs immediately and commits after every change.
+Self hostable Claude Code runner to seamlessly fire prompts from anywhere. Container accepts task prompts via HTTP and spawns Claude Code instance to autonomously implement them. Makes use of your Claude Code subscription instead of requiring an API key.
+
+## Dashboard
+
+![Dashboard](docs/Screenshot%202025-12-29%20at%207.56.47%20PM.png)
+
+![Logs View](docs/Screenshot%202025-12-29%20at%207.57.26%20PM.png)
 
 ## Quick Start
 
