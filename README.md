@@ -6,9 +6,36 @@ Self hostable Claude Code runner to execute prompts from anywhere. Container acc
 
 Claude Code uses your authenticated session from your OS (no API key). Claude Code will use your provided Github token to find your relevant repository, clone it, make requested changes based on your prompt, then open a PR. 
 
+## Architecture
+
+The system uses a two-stage LLM architecture:
+
+### Orchestrator Claude
+
+The first Claude instance receives your prompt and is responsible for:
+- Parsing your task to identify which repository you're referring to
+- Searching your GitHub repos via the `gh` CLI
+- Cloning the target repository and setting up the environment
+- Spawning a Worker Claude inside the cloned repo
+
+The orchestrator handles all the setup so the worker can focus purely on coding.
+
+### Worker Claude
+
+A second Claude instance runs inside the cloned repository and:
+- Picks up the repo's existing `.claude/`, `.mcp.json`, and skills
+- Opens a draft PR immediately so you can watch progress
+- Commits and pushes after every logical change (no batching)
+- Spawns subagents for complex tasks to preserve context
+- On failure: commits current state, updates PR with blockers, then exits cleanly
+
 ## Dashboard
 
+Dashboard view, fire prompts from here, and view running tasks.
+
 ![Dashboard](docs/dashboard.png)
+
+Log view, watch real time updates of task runners.
 
 ![Logs View](docs/logs-view.png)
 
