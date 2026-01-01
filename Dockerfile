@@ -18,8 +18,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
 # Claude Code
 RUN npm install -g @anthropic-ai/claude-code
 
-# Ensure node user owns their entire home directory
-RUN chown -R node:node /home/node
+# Create ~/.claude directory for Claude Code credentials and runtime files
+# Only .credentials.json is mounted from host; other files stay in container
+RUN mkdir -p /home/node/.claude && chown -R node:node /home/node
 
 WORKDIR /app
 COPY package.json ./

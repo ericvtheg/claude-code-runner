@@ -60,7 +60,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - PORT=3000
     volumes:
-      - ~/.claude:/home/node/.claude
+      - ~/.claude/.credentials.json:/home/node/.claude/.credentials.json:ro
     restart: unless-stopped
 
 volumes:
@@ -101,4 +101,4 @@ claude
 # Follow the login prompts to authenticate with your subscription
 ```
 
-This creates credentials at `~/.claude/` which get mounted into the container via the volume mount (`~/.claude:/home/node/.claude`). The container will use your subscription for all Claude API calls.
+This creates credentials at `~/.claude/.credentials.json` which gets mounted into the container as a read-only file. Only the OAuth credentials file is shared with the container - debug logs and other runtime files stay inside the container and don't pollute your host's `~/.claude` directory.

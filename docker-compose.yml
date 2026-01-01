@@ -9,7 +9,9 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - PORT=3000
     volumes:
-      - ~/.claude:/home/node/.claude
+      # Mount only OAuth credentials, not the entire ~/.claude directory
+      # This keeps debug logs and other runtime files inside the container
+      - ~/.claude/.credentials.json:/home/node/.claude/.credentials.json:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
