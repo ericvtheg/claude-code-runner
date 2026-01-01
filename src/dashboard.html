@@ -14,7 +14,30 @@
       max-width: 1200px;
       margin: 0 auto;
     }
-    h1 { color: #58a6ff; margin-bottom: 20px; }
+    h1 { color: #58a6ff; margin: 0; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #8b949e;
+      font-size: 14px;
+    }
+    .logout-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .logout-btn:hover { background: #30363d; }
     .stats {
       display: flex;
       gap: 20px;
@@ -163,7 +186,13 @@
   </style>
 </head>
 <body>
-  <h1>Claude Runner</h1>
+  <div class="header">
+    <h1>Claude Runner</h1>
+    <div class="user-info">
+      <span id="username"></span>
+      <button class="logout-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
 
   <div class="stats">
     <div class="stat running">
@@ -218,9 +247,37 @@
     let logRefreshInterval = null;
     let lastLogText = '';
 
+    async function fetchCurrentUser() {
+      try {
+        const res = await fetch('/api/me');
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('username').textContent = data.username;
+      } catch (e) {
+        console.error('Failed to fetch user:', e);
+      }
+    }
+
+    async function logout() {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (e) {
+        console.error('Logout failed:', e);
+        window.location.href = '/login';
+      }
+    }
+
     async function fetchTasks() {
       try {
         const res = await fetch('/tasks');
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
         const tasks = await res.json();
 
         let running = 0, completed = 0, failed = 0;
@@ -426,6 +483,7 @@
       if (e.key === 'Escape') closeModal();
     });
 
+    fetchCurrentUser();
     fetchTasks();
     setInterval(fetchTasks, 5000);
   </script>

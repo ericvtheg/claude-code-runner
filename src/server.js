@@ -1,8 +1,10 @@
 import express from 'express';
+import session from 'express-session';
+import bcrypt from 'bcryptjs';
 import pty from 'node-pty';
 import { randomUUID } from 'crypto';
-import { mkdir, rm, appendFile, readFile } from 'fs/promises';
-import { createWriteStream, createReadStream } from 'fs';
+import { mkdir, rm, appendFile, readFile, writeFile, access } from 'fs/promises';
+import { createWriteStream, createReadStream, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -11,10 +13,184 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session configuration
+const SESSION_SECRET = process.env.SESSION_SECRET || randomUUID();
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production' && process.env.HTTPS === 'true',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Auth data file path
+const AUTH_FILE = process.env.AUTH_FILE || '/data/auth.json';
+
+// Load or initialize auth data
+async function loadAuthData() {
+  try {
+    await access(AUTH_FILE);
+    const data = await readFile(AUTH_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+async function saveAuthData(data) {
+  const dir = path.dirname(AUTH_FILE);
+  await mkdir(dir, { recursive: true });
+  await writeFile(AUTH_FILE, JSON.stringify(data, null, 2));
+}
+
+async function isSetupComplete() {
+  const auth = await loadAuthData();
+  return auth !== null && auth.username && auth.passwordHash;
+}
+
+// Auth middleware
+async function requireAuth(req, res, next) {
+  const setupComplete = await isSetupComplete();
+
+  // Allow setup page and setup POST when not configured
+  if (!setupComplete) {
+    if (req.path === '/setup' || req.path === '/api/setup') {
+      return next();
+    }
+    return res.redirect('/setup');
+  }
+
+  // Allow login page and login POST when not authenticated
+  if (req.path === '/login' || req.path === '/api/login') {
+    return next();
+  }
+
+  // Check session
+  if (req.session && req.session.authenticated) {
+    return next();
+  }
+
+  // Not authenticated
+  if (req.path.startsWith('/api/') || req.path.startsWith('/task')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  return res.redirect('/login');
+}
+
+// Apply auth middleware to all routes except static assets
+app.use(requireAuth);
 
 const tasks = new Map();
 const WORK_DIR = '/tmp/work';
 const TASK_TIMEOUT = 60 * 60 * 1000; // 1 hour
+
+// ============ Auth Routes ============
+
+// Setup page (first-time configuration)
+app.get('/setup', async (req, res) => {
+  if (await isSetupComplete()) {
+    return res.redirect('/login');
+  }
+  const html = await readFile(path.join(__dirname, 'setup.html'), 'utf-8');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+// Setup API
+app.post('/api/setup', async (req, res) => {
+  if (await isSetupComplete()) {
+    return res.status(400).json({ error: 'Setup already complete' });
+  }
+
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  if (username.length < 3) {
+    return res.status(400).json({ error: 'Username must be at least 3 characters' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await saveAuthData({ username, passwordHash });
+
+  req.session.authenticated = true;
+  req.session.username = username;
+
+  res.json({ success: true });
+});
+
+// Login page
+app.get('/login', async (req, res) => {
+  if (!(await isSetupComplete())) {
+    return res.redirect('/setup');
+  }
+  if (req.session && req.session.authenticated) {
+    return res.redirect('/');
+  }
+  const html = await readFile(path.join(__dirname, 'login.html'), 'utf-8');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+// Login API
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  const auth = await loadAuthData();
+  if (!auth) {
+    return res.status(400).json({ error: 'Setup not complete' });
+  }
+
+  if (username !== auth.username) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const valid = await bcrypt.compare(password, auth.passwordHash);
+  if (!valid) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  req.session.authenticated = true;
+  req.session.username = username;
+
+  res.json({ success: true });
+});
+
+// Logout
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Get current user info
+app.get('/api/me', (req, res) => {
+  if (req.session && req.session.authenticated) {
+    res.json({ username: req.session.username });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+// ============ System Prompts ============
 
 function getWorkerSystemPrompt(branchName) {
   return `
