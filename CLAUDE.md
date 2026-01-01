@@ -60,7 +60,7 @@ Containerized service that accepts task prompts via HTTP, uses Claude to identif
 **Environment:**
 - `GITHUB_TOKEN` - Required, needs repo/read:org/workflow scopes
 - `PORT` - Optional, defaults to 3000
-- Claude credentials mounted at `/root/.claude` (needs write access for debug logs)
+- Claude OAuth credentials mounted read-only at `/home/node/.claude/.credentials.json` (debug logs stay in container)
 
 ## Git Conventions
 
