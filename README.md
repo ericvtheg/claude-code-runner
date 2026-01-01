@@ -2,9 +2,19 @@
 
 Self hostable Claude Code runner to execute prompts from anywhere. Container accepts task prompts via HTTP and spawns Claude Code instance to autonomously implement them. Includes an integrated dashboard to submit tasks and monitor progress. Makes use of your Claude Code subscription instead of requiring an API key.
 
-## Security
+## Security & Authentication
 
-This service has no built-in authentication. It is expected to be hosted behind a VPN or private network that only you have access to. Do not expose to the public internet; doing so is a MAJOR security risk.
+This service includes username/password authentication. On first visit, you'll be prompted to create an administrator account. After setup, all dashboard and API access requires authentication.
+
+**First-time setup:**
+1. Navigate to the dashboard URL
+2. You'll be redirected to the setup page
+3. Create a username and password (min 8 characters)
+4. You'll be automatically logged in
+
+Credentials are stored in a JSON file (default: `/data/auth.json`) with bcrypt-hashed passwords. Mount a persistent volume to preserve credentials across container restarts.
+
+> **Note:** While authentication protects the dashboard, it's still recommended to host behind a VPN or private network for defense in depth.
 
 ## How it Works
 
@@ -59,12 +69,14 @@ services:
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - PORT=3000
+      - SESSION_SECRET=${SESSION_SECRET}  # Optional: set for consistent sessions across restarts
     volumes:
       - ~/.claude:/home/node/.claude
+      - claude-data:/data  # Persistent auth credentials
     restart: unless-stopped
 
 volumes:
-  claude-local:
+  claude-data:
 ```
 
 ## API

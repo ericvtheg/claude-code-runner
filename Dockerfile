@@ -32,6 +32,9 @@ RUN chown -R node:node /app
 # Create work directory
 RUN mkdir -p /tmp/work && chown -R node:node /tmp/work
 
+# Create data directory for persistent auth storage
+RUN mkdir -p /data && chown -R node:node /data
+
 # Allow node user to install global packages (npm, pip, gem, etc.)
 # Claude runs as non-root but needs to install tools dynamically.
 # In a container, giving write access to /usr/local and /opt is safe.
