@@ -85,6 +85,22 @@ curl http://localhost:7334/task/<id>/logs
 curl http://localhost:7334/health
 ```
 
+## Docker Image Tags
+
+The project publishes Docker images to Docker Hub with the following tagging strategy:
+
+- **Version tags** (e.g., `1.4.1`): Internal release images created automatically on every push to `main` that triggers a semantic release. Use these for testing new features before they're promoted to latest.
+- **`latest` tag**: Stable release promoted manually via GitHub Actions. This is the recommended tag for production use.
+
+### Promoting a Release
+
+To promote a version to `latest`, use the "Promote Release to Latest" GitHub Action:
+
+1. Go to Actions > "Promote Release to Latest"
+2. Click "Run workflow"
+3. Optionally specify a version (defaults to most recent release)
+4. The workflow will pull the versioned image, tag it as `latest`, and push
+
 ## Requirements
 
 - `GITHUB_TOKEN` with repo scope

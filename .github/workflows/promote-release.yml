@@ -1,0 +1,70 @@
+name: Promote Release to Latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to promote to latest (e.g., 1.4.1). Leave empty to use most recent release.'
+        required: false
+        type: string
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/claude-code-runner
+
+jobs:
+  promote:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version to promote
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Get most recent git tag (semantic versioning)
+            VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Promoting version: $VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull, tag, and push as latest
+        run: |
+          SOURCE_IMAGE="${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+          TARGET_IMAGE="${{ env.IMAGE_NAME }}:latest"
+
+          echo "Pulling $SOURCE_IMAGE..."
+          docker pull "$SOURCE_IMAGE"
+
+          echo "Tagging as $TARGET_IMAGE..."
+          docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE"
+
+          echo "Pushing $TARGET_IMAGE..."
+          docker push "$TARGET_IMAGE"
+
+          echo "Successfully promoted $SOURCE_IMAGE to latest"
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme-filepath: ./README.md
+          short-description: "Autonomous Claude agent that takes task prompts and creates PRs"
