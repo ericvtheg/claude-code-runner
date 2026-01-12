@@ -156,7 +156,7 @@ app.post('/api/login', async (req, res) => {
     return res.status(400).json({ error: 'Setup not complete' });
   }
 
-  if (username !== auth.username) {
+  if (username.toLowerCase() !== auth.username.toLowerCase()) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
