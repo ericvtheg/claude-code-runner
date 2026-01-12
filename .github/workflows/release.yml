@@ -9,7 +9,7 @@ env:
 
 jobs:
   release:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
@@ -49,7 +49,7 @@ jobs:
 
   docker:
     needs: release
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
