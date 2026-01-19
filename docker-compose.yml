@@ -12,6 +12,7 @@ services:
       # Mount only OAuth credentials, not the entire ~/.claude directory
       # This keeps debug logs and other runtime files inside the container
       - ~/.claude/.credentials.json:/home/node/.claude/.credentials.json:ro
+      - claude-data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -21,4 +22,4 @@ services:
       start_period: 10s
 
 volumes:
-  claude-local:
+  claude-data:
