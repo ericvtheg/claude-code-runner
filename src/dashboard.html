@@ -217,6 +217,29 @@
     <button id="submit-btn" onclick="submitTask()">Submit Task</button>
   </div>
 
+  <div class="submit-form" style="margin-bottom: 30px;">
+    <h2>API Token</h2>
+    <div id="token-status">Loading...</div>
+    <div id="token-actions" style="margin-top: 12px;">
+      <button id="generate-btn" onclick="generateToken()" style="background: #238636; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; cursor: pointer;">
+        Generate New Token
+      </button>
+      <button id="revoke-btn" onclick="revokeToken()" style="background: #da3633; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; cursor: pointer; margin-left: 8px; display: none;">
+        Revoke
+      </button>
+    </div>
+    <div id="new-token-display" style="display: none; margin-top: 12px; background: #1a2e1a; border: 1px solid #3fb950; border-radius: 6px; padding: 12px;">
+      <div style="color: #3fb950; font-weight: bold; margin-bottom: 8px;">New token generated! Copy it now - it won't be shown again.</div>
+      <code id="new-token-value" style="word-break: break-all; font-size: 14px;"></code>
+      <button onclick="copyToken()" style="margin-left: 12px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Copy</button>
+    </div>
+    <div style="margin-top: 12px;">
+      <input type="password" id="api-token" placeholder="Paste token here for API access"
+        style="width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; padding: 8px; font-size: 14px;">
+      <small style="color: #8b949e;">Token saved in browser localStorage for dashboard requests</small>
+    </div>
+  </div>
+
   <div class="task-list">
     <h2>Tasks</h2>
     <table>
@@ -248,6 +271,77 @@
     let logRefreshInterval = null;
     let lastLogText = '';
 
+    // ============ Token Management ============
+
+    async function fetchTokenStatus() {
+      try {
+        const res = await fetch('/token');
+        const data = await res.json();
+        const statusEl = document.getElementById('token-status');
+        const revokeBtn = document.getElementById('revoke-btn');
+
+        if (data.exists) {
+          statusEl.innerHTML = `<span style="color: #3fb950;">Active token:</span> <code>${data.masked}</code>`;
+          revokeBtn.style.display = 'inline-block';
+        } else {
+          statusEl.innerHTML = '<span style="color: #8b949e;">No token configured - API is unprotected</span>';
+          revokeBtn.style.display = 'none';
+        }
+      } catch (e) {
+        document.getElementById('token-status').textContent = 'Error loading token status';
+      }
+    }
+
+    async function generateToken() {
+      if (!confirm('This will replace any existing token. Continue?')) return;
+
+      try {
+        const res = await fetch('/token/generate', { method: 'POST' });
+        const data = await res.json();
+
+        // Show new token
+        document.getElementById('new-token-value').textContent = data.token;
+        document.getElementById('new-token-display').style.display = 'block';
+
+        // Auto-fill the input
+        document.getElementById('api-token').value = data.token;
+        localStorage.setItem('api_token', data.token);
+
+        fetchTokenStatus();
+      } catch (e) {
+        alert('Failed to generate token: ' + e.message);
+      }
+    }
+
+    async function revokeToken() {
+      if (!confirm('This will disable API authentication. Continue?')) return;
+
+      try {
+        await fetch('/token', { method: 'DELETE' });
+        document.getElementById('new-token-display').style.display = 'none';
+        document.getElementById('api-token').value = '';
+        localStorage.removeItem('api_token');
+        fetchTokenStatus();
+      } catch (e) {
+        alert('Failed to revoke token: ' + e.message);
+      }
+    }
+
+    function copyToken() {
+      const token = document.getElementById('new-token-value').textContent;
+      navigator.clipboard.writeText(token);
+      alert('Token copied to clipboard!');
+    }
+
+    function getAuthHeaders() {
+      const token = document.getElementById('api-token')?.value;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      return headers;
+    }
+
+    // ============ User Management ============
+
     async function fetchCurrentUser() {
       try {
         const res = await fetch('/api/me');
@@ -274,7 +368,7 @@
 
     async function fetchTasks() {
       try {
-        const res = await fetch('/tasks');
+        const res = await fetch('/tasks', { headers: getAuthHeaders() });
         if (res.status === 401) {
           window.location.href = '/login';
           return;
@@ -327,7 +421,7 @@
       try {
         const res = await fetch('/task', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ prompt })
         });
         const data = await res.json();
@@ -420,7 +514,7 @@
 
     async function fetchLogs(id) {
       try {
-        const res = await fetch('/task/' + id + '/logs');
+        const res = await fetch('/task/' + id + '/logs', { headers: getAuthHeaders() });
         const text = await res.text();
 
         // Skip update if content hasn't changed
@@ -484,7 +578,15 @@
       if (e.key === 'Escape') closeModal();
     });
 
+    // Load saved token from localStorage
+    const tokenInput = document.getElementById('api-token');
+    tokenInput.value = localStorage.getItem('api_token') || '';
+    tokenInput.addEventListener('change', () => {
+      localStorage.setItem('api_token', tokenInput.value);
+    });
+
     fetchCurrentUser();
+    fetchTokenStatus();
     fetchTasks();
     setInterval(fetchTasks, 5000);
   </script>

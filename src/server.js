@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import pty from 'node-pty';
 import { randomUUID } from 'crypto';
 import { mkdir, rm, appendFile, readFile, writeFile, access } from 'fs/promises';
-import { createWriteStream, createReadStream, existsSync } from 'fs';
+import { createWriteStream, createReadStream, existsSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -28,8 +28,37 @@ app.use(session({
   }
 }));
 
-// Auth data file path
-const AUTH_FILE = process.env.AUTH_FILE || '/data/auth.json';
+// Data directory and file paths
+const DATA_DIR = process.env.DATA_DIR || '/data';
+const AUTH_FILE = process.env.AUTH_FILE || path.join(DATA_DIR, 'auth.json');
+const TOKEN_FILE = path.join(DATA_DIR, 'token.json');
+
+// API Token management
+function loadToken() {
+  try {
+    if (existsSync(TOKEN_FILE)) {
+      const data = JSON.parse(readFileSync(TOKEN_FILE, 'utf-8'));
+      return data.token || null;
+    }
+  } catch (e) {
+    console.error('Failed to load token:', e.message);
+  }
+  return null;
+}
+
+function saveToken(token) {
+  try {
+    writeFileSync(TOKEN_FILE, JSON.stringify({ token, created: new Date().toISOString() }), 'utf-8');
+  } catch (e) {
+    console.error('Failed to save token:', e.message);
+  }
+}
+
+function generateToken() {
+  return 'ccr_' + randomUUID().replace(/-/g, '');
+}
+
+let currentToken = loadToken();
 
 // Load or initialize auth data
 async function loadAuthData() {
@@ -70,9 +99,23 @@ async function requireAuth(req, res, next) {
     return next();
   }
 
-  // Check session
+  // Allow token management endpoints (protected by being first-time setup or showing masked values)
+  if (req.path === '/token' || req.path === '/token/generate') {
+    return next();
+  }
+
+  // Check session auth first (for browser users)
   if (req.session && req.session.authenticated) {
     return next();
+  }
+
+  // Check Bearer token auth (for API clients)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    if (currentToken && token === currentToken) {
+      return next();
+    }
   }
 
   // Not authenticated
@@ -188,6 +231,39 @@ app.get('/api/me', (req, res) => {
   } else {
     res.status(401).json({ error: 'Not authenticated' });
   }
+});
+
+// ============ API Token Management ============
+
+// Generate new API token
+app.post('/token/generate', (req, res) => {
+  const token = generateToken();
+  currentToken = token;
+  saveToken(token);
+  res.json({ token }); // Full token returned only on generation
+});
+
+// Get token status (masked)
+app.get('/token', (req, res) => {
+  if (!currentToken) {
+    return res.json({ exists: false });
+  }
+  // Return masked token: ccr_a1b2...x9z0
+  const masked = currentToken.slice(0, 8) + '...' + currentToken.slice(-4);
+  res.json({ exists: true, masked });
+});
+
+// Revoke token
+app.delete('/token', (req, res) => {
+  currentToken = null;
+  try {
+    if (existsSync(TOKEN_FILE)) {
+      writeFileSync(TOKEN_FILE, JSON.stringify({ token: null }), 'utf-8');
+    }
+  } catch (e) {
+    console.error('Failed to revoke token:', e.message);
+  }
+  res.json({ ok: true });
 });
 
 // ============ System Prompts ============

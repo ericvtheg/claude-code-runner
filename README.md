@@ -77,28 +77,55 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}  # Optional: set for consistent sessions across restarts
     volumes:
       - ~/.claude/.credentials.json:/home/node/.claude/.credentials.json:ro
-      - claude-data:/data  # Persistent auth credentials
+      - claude-data:/data  # Persistent auth credentials and API tokens
     restart: unless-stopped
 
 volumes:
   claude-data:
 ```
 
+## API Token Authentication
+
+For programmatic API access (scripts, CI/CD, external services), generate an API token through the dashboard:
+
+1. Open the dashboard at `http://localhost:7334`
+2. Click "Generate New Token"
+3. Copy the token (shown once, starts with `ccr_`)
+4. Use in API requests: `Authorization: Bearer ccr_...`
+
+Tokens are persisted in `/data/token.json`. Mount a volume to preserve across restarts.
+
+### API Endpoints
+
+| Endpoint | Auth Required | Description |
+|----------|---------------|-------------|
+| `POST /token/generate` | Session only | Generate new API token |
+| `GET /token` | No | Get masked token status |
+| `DELETE /token` | No | Revoke current token |
+| `POST /task` | Yes | Submit new task |
+| `GET /task/:id` | Yes | Get task status |
+| `GET /task/:id/logs` | Yes | Stream task logs |
+| `GET /tasks` | Yes | List all tasks |
+| `GET /health` | No | Health check |
+
 ## API
 
 ```bash
-# Submit a task
+# Submit a task (with API token)
 curl -X POST http://localhost:7334/task \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ccr_your_token_here" \
   -d '{"prompt": "In the acme-api repo, fix the token refresh bug"}'
 
 # Check status
-curl http://localhost:7334/task/<id>
+curl -H "Authorization: Bearer ccr_your_token_here" \
+  http://localhost:7334/task/<id>
 
 # View logs
-curl http://localhost:7334/task/<id>/logs
+curl -H "Authorization: Bearer ccr_your_token_here" \
+  http://localhost:7334/task/<id>/logs
 
-# Health check
+# Health check (no auth required)
 curl http://localhost:7334/health
 ```
 
