@@ -104,6 +104,11 @@ async function requireAuth(req, res, next) {
     return next();
   }
 
+  // Allow health check for external monitoring
+  if (req.path === '/health') {
+    return next();
+  }
+
   // Check session auth first (for browser users)
   if (req.session && req.session.authenticated) {
     return next();
