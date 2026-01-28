@@ -13,7 +13,7 @@ Set the following environment variables:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CLAUDE_RUNNER_URL` | No | `http://homelab:7334` | Base URL of Claude Code Runner |
+| `CLAUDE_RUNNER_URL` | Yes | — | Base URL of Claude Code Runner (e.g., `http://localhost:7334`) |
 | `CLAUDE_RUNNER_TOKEN` | Yes | — | API token (starts with `ccr_`) |
 
 ## API Reference

@@ -151,7 +151,7 @@ The project publishes Docker images to Docker Hub with the following tagging str
 
 ```bash
 # Submit a task
-curl -X POST http://homelab:7334/task \
+curl -X POST http://localhost:7334/task \
   -H "Authorization: Bearer ccr_your_token" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "In my-org/my-repo, add unit tests for the auth module"}'
