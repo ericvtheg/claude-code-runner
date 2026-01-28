@@ -132,6 +132,60 @@ When you submit a task, Claude Code Runner uses a two-phase approach:
 - Uses subagents for complex tasks to preserve context
 - On failure: commits current state, updates PR with blockers, exits cleanly
 
+## Completion Notifications
+
+Claude Code Runner does not have built-in webhooks, so use a temporary cron job to poll for completion and notify the user.
+
+### Pattern
+
+1. Submit task → get task ID
+2. Create cron job polling `/task/{id}` every 30 seconds
+3. When status is `completed` or `failed` → notify user → delete cron job
+
+This avoids permanent polling overhead — the cron only exists while a task is running.
+
+### Example Cron Setup
+
+After submitting a task (e.g., `edaf408d`), create a polling cron:
+
+```bash
+clawdbot cron add \
+  --name "ccr-poll-edaf408d" \
+  --every 30s \
+  --session isolated \
+  --message "Poll Claude Code Runner task edaf408d. Check http://localhost:7334/task/edaf408d. If completed: notify user with PR URL, then delete this cron (ccr-poll-edaf408d). If failed: notify with error, delete cron. If running/queued: reply HEARTBEAT_OK." \
+  --deliver \
+  --channel telegram \
+  --to "<user_id>"
+```
+
+Or via the cron tool:
+
+```json
+{
+  "name": "ccr-poll-<task_id>",
+  "sessionTarget": "isolated",
+  "schedule": {"kind": "every", "everyMs": 30000},
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Poll task <task_id>. On completion/failure, notify and delete this cron.",
+    "deliver": true,
+    "channel": "telegram",
+    "to": "<user_id>"
+  }
+}
+```
+
+### Cleanup
+
+The cron job should delete itself after notifying:
+
+```bash
+clawdbot cron remove <cron_job_id>
+```
+
+Or via tool: `cron.remove` with the job ID.
+
 ## Limitations
 
 - **One task at a time**: While multiple tasks can run, each consumes significant resources
