@@ -132,6 +132,40 @@ When you submit a task, Claude Code Runner uses a two-phase approach:
 - Uses subagents for complex tasks to preserve context
 - On failure: commits current state, updates PR with blockers, exits cleanly
 
+## Completion Notifications
+
+To avoid manual polling, Clawdbot should set up automatic completion notifications using temporary cron jobs.
+
+### How It Works
+
+1. When a task is submitted, create a temporary cron job to poll for completion
+2. The cron runs every 30 seconds, checking the task status via `GET /task/:id`
+3. When status becomes `completed` or `failed`, notify the user with the result
+4. After notifying, the cron deletes itself
+
+### Workflow
+
+```
+1. Submit task → get task ID
+2. Create cron job: every 30s, poll /task/{id}
+3. On completion/failure → notify user → delete cron
+```
+
+### Notification Content
+
+On **completion**, include:
+- Confirmation that the task finished
+- PR URL (from task response or logs)
+- Brief summary of what was done
+
+On **failure**, include:
+- The error type (see Error Handling section)
+- Suggestion to check logs for details
+
+### Why Temporary Crons?
+
+This pattern avoids permanent polling overhead—the cron only exists while a task is running. Once the task completes (or fails), the cron cleans up after itself, leaving no ongoing resource usage.
+
 ## Limitations
 
 - **One task at a time**: While multiple tasks can run, each consumes significant resources
