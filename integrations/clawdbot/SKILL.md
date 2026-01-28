@@ -9,12 +9,14 @@ Use this skill to submit coding tasks to a Claude Code Runner instance. The runn
 
 ## Configuration
 
-Set the following environment variables:
+This skill expects the following environment variables to be set in Clawdbot's environment:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CLAUDE_RUNNER_URL` | Yes | — | Base URL of Claude Code Runner (e.g., `http://localhost:7334`) |
-| `CLAUDE_RUNNER_TOKEN` | Yes | — | API token (starts with `ccr_`) |
+| Variable | Description |
+|----------|-------------|
+| `CLAUDE_RUNNER_URL` | Base URL of Claude Code Runner (e.g., `http://homelab:7334`) |
+| `CLAUDE_RUNNER_TOKEN` | API token (starts with `ccr_`) |
+
+These should already be configured in your Clawdbot deployment. The skill uses `${CLAUDE_RUNNER_URL}` and `${CLAUDE_RUNNER_TOKEN}` directly in API calls.
 
 ## API Reference
 

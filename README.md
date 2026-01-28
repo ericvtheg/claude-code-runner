@@ -143,16 +143,16 @@ The project publishes Docker images to Docker Hub with the following tagging str
 [Clawdbot](https://github.com/clawdbot/clawdbot) is an AI assistant framework that can use Claude Code Runner as a skill. This allows AI agents to programmatically submit coding tasks and monitor their progress.
 
 **Quick setup:**
-1. Copy the [`integrations/clawdbot/`](integrations/clawdbot/) folder into your Clawdbot workspace
-2. Set `CLAUDE_RUNNER_URL` and `CLAUDE_RUNNER_TOKEN` environment variables
-3. The skill is now available for your AI agents to use
+1. Copy the [`integrations/clawdbot/`](integrations/clawdbot/) folder into your Clawdbot workspace's `skills/` directory
+2. Add `CLAUDE_RUNNER_URL` and `CLAUDE_RUNNER_TOKEN` to Clawdbot's environment
+3. The skill is now available — the agent will use the env vars automatically
 
 **Programmatic usage example:**
 
 ```bash
-# Submit a task
-curl -X POST http://localhost:7334/task \
-  -H "Authorization: Bearer ccr_your_token" \
+# Submit a task (using env vars)
+curl -X POST "${CLAUDE_RUNNER_URL}/task" \
+  -H "Authorization: Bearer ${CLAUDE_RUNNER_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "In my-org/my-repo, add unit tests for the auth module"}'
 
