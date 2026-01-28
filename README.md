@@ -136,6 +136,31 @@ The project publishes Docker images to Docker Hub with the following tagging str
 - **Version tags** (e.g., `1.4.1`): Internal release images created automatically on every push to `main` that triggers a semantic release. Use these for testing new features before they're promoted to latest.
 - **`latest` tag**: Stable release promoted manually via GitHub Actions. This is the recommended tag for production use.
 
+## Integrations
+
+### Clawdbot
+
+[Clawdbot](https://github.com/clawdbot/clawdbot) is an AI assistant framework that can use Claude Code Runner as a skill. This allows AI agents to programmatically submit coding tasks and monitor their progress.
+
+**Quick setup:**
+1. Copy the [`integrations/clawdbot/`](integrations/clawdbot/) folder into your Clawdbot workspace's `skills/` directory
+2. Add `CLAUDE_RUNNER_URL` and `CLAUDE_RUNNER_TOKEN` to Clawdbot's environment
+3. The skill is now available — the agent will use the env vars automatically
+
+**Programmatic usage example:**
+
+```bash
+# Submit a task (using env vars)
+curl -X POST "${CLAUDE_RUNNER_URL}/task" \
+  -H "Authorization: Bearer ${CLAUDE_RUNNER_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "In my-org/my-repo, add unit tests for the auth module"}'
+
+# Response: {"id": "abc123", "status": "running", ...}
+```
+
+See [`integrations/clawdbot/SKILL.md`](integrations/clawdbot/SKILL.md) for complete API documentation, example prompts, and workflow details.
+
 ## Requirements
 
 - `GITHUB_TOKEN` with repo scope
