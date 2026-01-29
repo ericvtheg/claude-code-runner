@@ -184,3 +184,69 @@ curl "${CLAUDE_RUNNER_URL}/task/${TASK_ID}/logs" \
 ```bash
 curl "${CLAUDE_RUNNER_URL}/health"
 ```
+
+## Completion Notifications (Clawdbot)
+
+Claude Code Runner doesn't have built-in webhooks, so use a temporary cron job to poll for completion and notify the user.
+
+### Pattern
+
+1. Submit task → get task ID
+2. Create cron job polling `/task/{id}` every 30 seconds
+3. When status is `completed` or `failed` → notify user → delete cron job
+
+This avoids permanent polling overhead — the cron only exists while a task is running.
+
+### ⚠️ Important: Cron Self-Deletion Issue
+
+**Do NOT use isolated sessions for polling crons.** Isolated sessions cannot reliably delete their own cron jobs due to gateway timeout issues. This causes the cron to keep polling and spamming notifications after task completion.
+
+**Recommended approach:** Poll from the main session instead:
+
+```json
+{
+  "name": "ccr-poll-<task_id>",
+  "sessionTarget": "current",
+  "schedule": {"kind": "every", "everyMs": 30000},
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Poll Claude Code Runner task <task_id>. Check ${CLAUDE_RUNNER_URL}/task/<task_id>. If status is 'completed': notify user with the PR URL, then delete this cron job (ccr-poll-<task_id>). If status is 'failed': notify user with error details, then delete this cron job. If status is 'running' or 'queued': reply HEARTBEAT_OK.",
+    "deliver": true,
+    "channel": "<channel>",
+    "to": "<user_id>"
+  }
+}
+```
+
+**Why main session works:**
+- Main session has reliable access to `cron.remove`
+- No gateway timeout issues
+- Cron can successfully clean itself up
+
+**If you must use isolated sessions:**
+- Accept that cleanup may require manual intervention
+- The user may need to manually delete stale cron jobs
+- Consider using `deleteAfterRun: true` with one-shot crons that reschedule themselves (avoids the self-deletion problem entirely)
+
+### Example: CLI Cron Setup
+
+After submitting a task (e.g., `edaf408d`):
+
+```bash
+clawdbot cron add \
+  --name "ccr-poll-edaf408d" \
+  --every 30s \
+  --session current \
+  --message "Poll Claude Code Runner task edaf408d. Check ${CLAUDE_RUNNER_URL}/task/edaf408d. If completed: notify user with PR URL, then delete this cron (ccr-poll-edaf408d). If failed: notify with error, delete cron. If running/queued: reply HEARTBEAT_OK." \
+  --deliver \
+  --channel telegram \
+  --to "<user_id>"
+```
+
+### Cleanup
+
+The cron job deletes itself after notifying (works reliably from main session):
+
+```bash
+clawdbot cron remove <cron_job_id>
+```
